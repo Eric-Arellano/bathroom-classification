@@ -1,0 +1,26 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+lib/
+bin/
+include/
+Scripts/
+lib64
+pyvenv.cfg
+pip-selfcheck.json
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# MyPy
+.mypy_cache/
+
+# PyTest
+.pytest_cache/
+
+# Selenium
+selenium/
