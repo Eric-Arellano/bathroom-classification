@@ -2,12 +2,13 @@ import os
 from pathlib import Path
 from typing import List
 
-import imutils
-import numpy as np
+import cv2
+import requests
 from selenium import webdriver
 
 Query = str
 Url = str
+FilePath = str
 
 
 def main() -> None:
@@ -24,10 +25,11 @@ def main() -> None:
                                       'gender inclusive bathroom sign',
                                       'all gender bathroom sign',
                                       ])
-    images = download_as_np_arrays(urls)
-    images = remove_corrupt_images(images)
-    images = deduplicate(images)
-    save_as_files(images)
+    image_data = download(urls)
+    image_data = remove_empty_images(image_data)
+    image_data = deduplicate(image_data)
+    file_paths = save_images(image_data)
+    remove_corrupt_images(file_paths)
 
 
 def get_urls_multiple_queries(queries: List[Query]) -> List[Url]:
@@ -62,51 +64,67 @@ def get_urls(query: Query) -> List[Url]:
     return result.split('\n')
 
 
-def download_as_np_arrays(urls: List[Url]) -> List[np.ndarray]:
+def download(urls: List[Url]) -> List[bytes]:
     """
-    Get image and convert to a Numpy array representing the image.
+    Get image file.
     """
 
-    def get_image(url: Url) -> np.ndarray:
+    def get_image(url: Url) -> bytes:
         try:
             print(f'Attempting to download {url}.')
-            return imutils.url_to_image(url)
+            r = requests.get(url, timeout=45)
+            return r.content
         except:
             print(f'Failed...skipping.')
-            pass
 
     return [get_image(url) for url in urls]
 
 
-def remove_corrupt_images(images: List[np.ndarray]) -> List[np.ndarray]:
-    print(f'Size before removing corrupt images: {len(images)}')
-    cleaned = [image for image in images if image is not None]
-    print(f'Size after removing corrupt images: {len(cleaned)}')
+def remove_empty_images(image_data: List[bytes]) -> List[bytes]:
+    """
+    Remove any bytes that are None.
+    """
+    print(f'Size before removing empty images: {len(image_data)}')
+    cleaned = [image for image in image_data if image is not None]
+    print(f'Size after removing empty images: {len(cleaned)}')
     return cleaned
 
 
-def deduplicate(images: List[np.ndarray]) -> List[np.ndarray]:
+def deduplicate(image_data: List[bytes]) -> List[bytes]:
     """
     Remove any identical images.
     """
-    print(f'Size before de-duplication: {len(images)}')
+    print(f'Size before de-duplication: {len(image_data)}')
     uniques = []
-    for image in images:
-        if not any(np.array_equal(image, unique_image) for unique_image in uniques):
+    for image in image_data:
+        if not any(image == unique_image for unique_image in uniques):
             uniques.append(image)
     print(f'Size after de-duplication: {len(uniques)}')
     return uniques
 
 
-def save_as_files(images: List[np.ndarray]) -> None:
+def save_images(image_data: List[bytes]) -> List[FilePath]:
     """
-    Save as Numpy files with names indexed from 0 to n.
+    Save as .jpg files with names indexed from 0 to n.
     """
     current_file_path = Path(os.path.realpath(__file__))
     data_folder = str(current_file_path.parents[1].joinpath('data'))
-    for index, image in enumerate(images):
-        file_name = f'{data_folder}/{str(index).zfill(4)}.npy'
-        np.save(file_name, image)
+    file_paths = []
+    for index, image in enumerate(image_data):
+        file_name = f'{data_folder}/{str(index).zfill(4)}.jpg'
+        file_paths.append(file_name)
+        with open(file_name, 'wb') as file:
+            file.write(image)
+    return file_paths
+
+
+def remove_corrupt_images(file_paths: List[FilePath]) -> None:
+    print(f'Size before removing corrupt images: {len(file_paths)}')
+    corrupt = [file_path for file_path in file_paths
+               if cv2.imread(file_path) is None]
+    print(f'Size after removing corrupt images: {len(file_paths) - len(corrupt)}')
+    for file in corrupt:
+        os.remove(file)
 
 
 if __name__ == '__main__':
